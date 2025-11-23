@@ -1,0 +1,19 @@
+[project]
+name = "MediTranslate"
+version = "0.1.0"
+description = "A simple, private, and offline medical translation tool that scans medical documents and provides translated + explained versions."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "loguru>=0.7.3",
+    "numpy>=2.3.5",
+    "opencv-python>=4.11.0.86",
+    "pillow>=12.0.0",
+    "pyside6>=6.10.1",
+    "pytesseract>=0.3.13",
+    "reportlab>=4.4.5",
+    "sacremoses>=0.1.1",
+    "sentencepiece>=0.2.1",
+    "torch>=2.9.1",
+    "transformers>=4.57.1",
+]
