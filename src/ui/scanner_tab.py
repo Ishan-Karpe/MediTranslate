@@ -1,331 +1,299 @@
 """
 src/ui/scanner_tab.py
-Handles document upload, display, and OCR extraction with background threading.
+The "Intelligent Assistant" UI Layout.
+FIXED: Added robust container widgets to prevent layout collapse.
 """
 from pathlib import Path
 import cv2
 import numpy as np
 from loguru import logger
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFileDialog, QMessageBox, QGroupBox, QScrollArea, QFrame,
-    QSplitter, QTextEdit, QComboBox
+    QFileDialog, QMessageBox, QGroupBox, QTextEdit, 
+    QScrollArea, QFrame, QStackedWidget, QSizePolicy
 )
-# --- CRITICAL IMPORTS FOR THREADING ---
-from PySide6.QtCore import Qt, Signal, QObject, QThread
-from PySide6.QtGui import QPixmap, QImage
+from PySide6.QtCore import Qt, Signal, QThread, QObject
 
-# Custom Imports
-from utils.image_processing import ImageProcessor
+# Services
 from services.ocr_service import OCRService
+from services.analysis_service import AnalysisService
+from utils.image_processing import ImageProcessor
 
-# --- WORKER CLASS (Runs in Background) ---
-class OCRWorker(QObject):
-    """
-    Runs OCR in a background thread to prevent UI freezing.
-    """
-    finished = Signal(str)  # Signal to send text back to UI
-    error = Signal(str)     # Signal to send errors back
+# --- WORKER THREAD ---
+class ProcessingWorker(QObject):
+    finished = Signal(str, list)
+    error = Signal(str)
 
-    def __init__(self, service, image, lang_code):
+    def __init__(self, ocr_service, analysis_service, image):
         super().__init__()
-        self.service = service
+        self.ocr = ocr_service
+        self.analysis = analysis_service
         self.image = image
-        self.lang_code = lang_code
 
     def run(self):
-        """The heavy lifting happens here."""
         try:
-            # This blocking call now runs in the background
-            text = self.service.extract_text(self.image, lang=self.lang_code)
-            self.finished.emit(text)
+            # 1. OCR
+            raw_text = self.ocr.extract_text(self.image)
+            # 2. Translate (Mock)
+            translated_text = self.analysis.mock_translate(raw_text, "Spanish")
+            # 3. Insights
+            insights = self.analysis.analyze_text(raw_text)
+            
+            self.finished.emit(translated_text, insights)
         except Exception as e:
             self.error.emit(str(e))
 
+# --- AI CARD WIDGET ---
+class InsightCard(QFrame):
+    def __init__(self, title, desc, card_type="info"):
+        super().__init__()
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setObjectName(f"Card_{card_type}")
+        
+        # Make sure cards have a minimum height so they don't squash
+        self.setMinimumHeight(80)
+        
+        layout = QVBoxLayout(self)
+        lbl_title = QLabel(title)
+        lbl_title.setStyleSheet("font-weight: bold; font-size: 14px; color: #333; border: none;")
+        layout.addWidget(lbl_title)
+        
+        lbl_desc = QLabel(desc)
+        lbl_desc.setWordWrap(True)
+        lbl_desc.setStyleSheet("color: #555; font-size: 12px; border: none;")
+        layout.addWidget(lbl_desc)
+
 # --- MAIN TAB CLASS ---
 class ScannerTab(QWidget):
-    
-    image_loaded = Signal(np.ndarray)
-    
     def __init__(self):
         super().__init__()
-        
-        # Services
-        self.image_processor = ImageProcessor()
         self.ocr_service = OCRService()
-        
-        # State
-        self.current_image = None
-        self.original_image = None
-        self.ocr_thread = None # Keep reference to thread
-        
+        self.analysis_service = AnalysisService()
+        self.image_processor = ImageProcessor()
         self._setup_ui()
         self._apply_styles()
-    
+
     def _setup_ui(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # --- TOP: Controls (Step 1) ---
-        controls_group = QGroupBox("STEP 1: SOURCE")
-        controls_group.setObjectName("HeaderGroup")
-        controls_layout = QHBoxLayout(controls_group)
+        self.stack = QStackedWidget()
+        self.main_layout.addWidget(self.stack)
         
-        self.upload_btn = QPushButton("📂 Upload File")
-        self.upload_btn.setObjectName("PrimaryButton")
-        self.upload_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.upload_btn.clicked.connect(self._upload_image)
+        # ==========================
+        # VIEW 1: UPLOAD SCREEN
+        # ==========================
+        self.view_upload = QWidget()
+        upload_layout = QVBoxLayout(self.view_upload)
+        upload_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        upload_layout.setSpacing(20)
         
-        self.camera_btn = QPushButton("📷 Camera")
-        self.camera_btn.setObjectName("SecondaryButton")
-        self.camera_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.camera_btn.clicked.connect(self._capture_from_camera)
+        lbl_welcome = QLabel("MediTranslate AI")
+        lbl_welcome.setObjectName("TitleLabel")
+        lbl_welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        controls_layout.addWidget(self.upload_btn)
-        controls_layout.addWidget(self.camera_btn)
-        main_layout.addWidget(controls_group)
+        lbl_sub = QLabel("Upload a medical document to get\ntranslation and simplified explanations.")
+        lbl_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_sub.setStyleSheet("color: #666; font-size: 16px;")
         
-        # --- MIDDLE: Split View (Image | Text) ---
-        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(20)
         
-        # LEFT: Image Area
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.btn_upload = QPushButton("📂 Upload File")
+        self.btn_upload.setFixedSize(200, 60)
+        self.btn_upload.setObjectName("BigButton")
+        self.btn_upload.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_upload.clicked.connect(self._upload_image)
         
-        self.image_label = QLabel("📄\n\nNo Document\nLoaded")
-        self.image_label.setObjectName("EmptyState")
-        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.scroll_area.setWidget(self.image_label)
+        self.btn_camera = QPushButton("📷 Use Camera")
+        self.btn_camera.setFixedSize(200, 60)
+        self.btn_camera.setObjectName("BigButton")
+        self.btn_camera.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_camera.clicked.connect(self._capture_camera)
         
-        # RIGHT: Text Area
-        self.text_area = QTextEdit()
-        self.text_area.setPlaceholderText("Extracted text will appear here...")
-        self.text_area.setReadOnly(False)
-        self.text_area.setObjectName("ResultText")
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_upload)
+        btn_layout.addWidget(self.btn_camera)
+        btn_layout.addStretch()
         
-        # Add to splitter
-        self.splitter.addWidget(self.scroll_area)
-        self.splitter.addWidget(self.text_area)
-        self.splitter.setStretchFactor(0, 60)
-        self.splitter.setStretchFactor(1, 40)
+        upload_layout.addStretch()
+        upload_layout.addWidget(lbl_welcome)
+        upload_layout.addWidget(lbl_sub)
+        upload_layout.addLayout(btn_layout)
+        upload_layout.addStretch()
         
-        main_layout.addWidget(self.splitter, stretch=1)
+        # ==========================
+        # VIEW 2: RESULTS SCREEN
+        # ==========================
+        self.view_results = QWidget()
+        # The main wrapper layout
+        wrapper = QVBoxLayout(self.view_results)
+        wrapper.setContentsMargins(20, 20, 20, 20)
+        wrapper.setSpacing(20)
+
+        # --- FIX: Container for the Columns ---
+        # We wrap the columns in a widget to force them to render
+        results_container = QWidget()
+        results_layout = QHBoxLayout(results_container) # Apply layout to this widget
+        results_layout.setContentsMargins(0, 0, 0, 0)
+        results_layout.setSpacing(20)
         
-        # --- BOTTOM: Actions (Step 2 & 3) ---
-        actions_layout = QHBoxLayout()
+        # LEFT COLUMN (Text)
+        left_col = QVBoxLayout()
+        lbl_res_title = QLabel("TRANSLATED DOCUMENT")
+        lbl_res_title.setStyleSheet("font-weight: bold; color: #2E7D32; letter-spacing: 1px;")
         
-        # Group 2: Enhance
-        enhance_group = QGroupBox("STEP 2: CLEAN")
-        enhance_group.setObjectName("HeaderGroup")
-        e_layout = QHBoxLayout(enhance_group)
+        self.text_editor = QTextEdit()
+        self.text_editor.setPlaceholderText("Processing...")
+        self.text_editor.setObjectName("Editor")
+        # FORCE SIZE: Make sure editor expands
+        self.text_editor.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        self.enhance_btn = QPushButton("✨ Auto-Enhance")
-        self.enhance_btn.setObjectName("ActionButton")
-        self.enhance_btn.clicked.connect(self._enhance_image)
-        self.enhance_btn.setEnabled(False)
-        e_layout.addWidget(self.enhance_btn)
+        left_col.addWidget(lbl_res_title)
+        left_col.addWidget(self.text_editor)
         
-        # Group 3: OCR
-        ocr_group = QGroupBox("STEP 3: READ")
-        ocr_group.setObjectName("HeaderGroup")
-        o_layout = QHBoxLayout(ocr_group)
+        # RIGHT COLUMN (AI Cards)
+        right_col = QVBoxLayout()
+        lbl_ai_title = QLabel("AI MEDICAL INSIGHTS")
+        lbl_ai_title.setStyleSheet("font-weight: bold; color: #1565C0; letter-spacing: 1px;")
         
-        # Language Selector
-        self.lang_combo = QComboBox()
-        self.lang_combo.addItems(["English (eng)", "Spanish (spa)", "Hindi (hin)"])
-        self.lang_combo.setMinimumWidth(150)
-        self.lang_combo.setMinimumHeight(40)
+        self.ai_scroll = QScrollArea()
+        self.ai_scroll.setWidgetResizable(True)
+        self.ai_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.ai_scroll.setStyleSheet("background: transparent;")
+        # FORCE SIZE
+        self.ai_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        self.ocr_btn = QPushButton("🔍 Extract Text")
-        self.ocr_btn.setObjectName("PrimaryButton")
-        self.ocr_btn.clicked.connect(self._run_ocr)
-        self.ocr_btn.setEnabled(False)
+        self.ai_container = QWidget()
+        self.ai_layout = QVBoxLayout(self.ai_container)
+        self.ai_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.ai_layout.setSpacing(15)
         
-        o_layout.addWidget(self.lang_combo)
-        o_layout.addWidget(self.ocr_btn)
+        self.ai_scroll.setWidget(self.ai_container)
         
-        actions_layout.addWidget(enhance_group)
-        actions_layout.addWidget(ocr_group)
+        right_col.addWidget(lbl_ai_title)
+        right_col.addWidget(self.ai_scroll)
         
-        # Clear Button
-        self.reset_btn = QPushButton("❌")
-        self.reset_btn.setToolTip("Clear All")
-        self.reset_btn.setFixedSize(50, 50)
-        self.reset_btn.setObjectName("ResetButton")
-        self.reset_btn.clicked.connect(self.reset_state)
-        self.reset_btn.setEnabled(False)
+        # Add columns to container
+        results_layout.addLayout(left_col, stretch=60)
+        results_layout.addLayout(right_col, stretch=40)
         
-        actions_layout.addWidget(self.reset_btn)
+        # Add Container to Wrapper (This forces it to show up)
+        wrapper.addWidget(results_container, stretch=1)
         
-        main_layout.addLayout(actions_layout)
+        # Reset Button (Bottom)
+        self.btn_reset = QPushButton("❌ Scan New Document")
+        self.btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_reset.setObjectName("ResetButton")
+        self.btn_reset.clicked.connect(self._reset_app)
+        
+        wrapper.addWidget(self.btn_reset, alignment=Qt.AlignmentFlag.AlignRight)
+        
+        # Add views to stack
+        self.stack.addWidget(self.view_upload)
+        self.stack.addWidget(self.view_results)
 
     def _apply_styles(self):
         self.setStyleSheet("""
-            QWidget { background-color: #F5F7FA; font-family: 'Noto Sans', 'Segoe UI', sans-serif; }
+            QWidget { background-color: #F5F7FA; font-family: 'Segoe UI', sans-serif; }
             
-            QGroupBox {
-                font-weight: bold; border: 1px solid #E1E4E8; border-radius: 8px;
-                margin-top: 10px; background-color: white; padding-top: 15px;
+            QLabel#TitleLabel { font-size: 32px; font-weight: bold; color: #263238; }
+            
+            QPushButton#BigButton {
+                background-color: white; border: 2px solid #CFD8DC;
+                border-radius: 12px; font-size: 16px; font-weight: bold; color: #455A64;
             }
-            QGroupBox::title {
-                subcontrol-origin: margin; left: 10px; padding: 0 5px;
-                color: #546E7A; font-size: 11px; font-weight: bold;
-            }
-            
-            QPushButton { border-radius: 6px; font-weight: bold; font-size: 14px; padding: 10px; }
-            QPushButton#PrimaryButton { background-color: #2E7D32; color: white; border: none; }
-            QPushButton#PrimaryButton:hover { background-color: #388E3C; }
-            QPushButton#SecondaryButton { background-color: #1976D2; color: white; border: none; }
-            QPushButton#SecondaryButton:hover { background-color: #2196F3; }
-            QPushButton#ActionButton { background-color: #673AB7; color: white; border: none; }
-            QPushButton#ActionButton:hover { background-color: #7E57C2; }
-            QPushButton#ResetButton { background-color: #D32F2F; color: white; border: none; }
-            QPushButton#ResetButton:hover { background-color: #E53935; }
-            QPushButton:disabled { background-color: #E0E0E0; color: #9E9E9E; }
-            
-            QTextEdit#ResultText {
-                border: 1px solid #B0BEC5; border-radius: 8px;
-                background-color: white; padding: 10px; 
-                /* FIX: Added 'Noto Sans Devanagari' so Qt knows where to find Script 11 */
-                /* Put Devanagari FIRST so Qt uses it for drawing */
-                font-family: 'Noto Sans Devanagari', 'Noto Sans', sans-serif; 
-                font-size: 14px; color: #263238;
+            QPushButton#BigButton:hover {
+                background-color: #E3F2FD; border-color: #2196F3; color: #1976D2;
             }
             
-            QLabel#EmptyState {
-                background-color: #EEF0F4; border: 2px dashed #B0BEC5;
-                border-radius: 10px; color: #78909C; font-size: 16px; font-weight: bold;
+            QTextEdit#Editor {
+                border: none; border-radius: 12px; background-color: white;
+                padding: 20px; font-size: 16px; line-height: 1.5; color: #37474F;
+                font-family: 'Noto Sans', 'Noto Sans Devanagari', sans-serif;
             }
             
-            QComboBox {
-                border: 1px solid #B0BEC5; border-radius: 6px; padding: 5px;
-                background: white; font-size: 13px;
+            QPushButton#ResetButton {
+                background-color: #FFEBEE; color: #D32F2F; border: none;
+                padding: 12px 24px; border-radius: 6px; font-weight: bold;
             }
-
-            /* Scrollbar Styling */
-            QScrollBar:vertical {
-                border: none; background: #E0E0E0; width: 14px; margin: 0px; border-radius: 7px;
+            QPushButton#ResetButton:hover { background-color: #FFCDD2; }
+            
+            QFrame#Card_info {
+                background-color: white; border-left: 4px solid #2196F3;
+                border-radius: 4px; padding: 10px;
             }
-            QScrollBar::handle:vertical {
-                background: #90A4AE; min-height: 30px; border-radius: 7px;
+            QFrame#Card_warning {
+                background-color: #FFF8E1; border-left: 4px solid #FFC107;
+                border-radius: 4px; padding: 10px;
+            }
+            QFrame#Card_drug {
+                background-color: #E8F5E9; border-left: 4px solid #4CAF50;
+                border-radius: 4px; padding: 10px;
             }
         """)
 
-    # --- LOGIC HANDLERS ---
-    
+    # --- LOGIC ---
     def _upload_image(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Doc", str(Path.home()), "Images (*.png *.jpg *.jpeg)")
-        if file_path:
-            img = cv2.imread(file_path)
+        path, _ = QFileDialog.getOpenFileName(self, "Select Doc", str(Path.home()), "Images (*.png *.jpg)")
+        if path:
+            img = cv2.imread(path)
             if img is not None:
-                self._load_image_data(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                self._start_processing(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
-    def _capture_from_camera(self):
+    def _capture_camera(self):
         try:
             cap = cv2.VideoCapture(0)
             if not cap.isOpened(): cap = cv2.VideoCapture(1)
-            if not cap.isOpened(): raise RuntimeError("No camera found")
-            for _ in range(5): cap.read()
+            for _ in range(10): cap.read()
             ret, frame = cap.read()
             cap.release()
             if ret:
-                self._load_image_data(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                self._start_processing(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         except Exception as e:
-            QMessageBox.warning(self, "Camera Error", str(e))
+            QMessageBox.warning(self, "Error", str(e))
 
-    def _load_image_data(self, image_rgb):
-        self.original_image = image_rgb.copy()
-        self.current_image = image_rgb.copy()
+    def _start_processing(self, image):
+        self.stack.setCurrentIndex(1)
+        self.text_editor.setText("⏳ Scanning and Analyzing document...")
+        self.text_editor.setEnabled(False)
         
-        self.image_label.setStyleSheet("border: none; background-color: transparent;")
-        self.text_area.clear()
-        
-        self.enhance_btn.setEnabled(True)
-        self.ocr_btn.setEnabled(True)
-        self.reset_btn.setEnabled(True)
-        
-        self._display_current()
-
-    def _display_current(self):
-        if self.current_image is None: return
-        h, w, ch = self.current_image.shape
-        bytes_per_line = ch * w
-        qt_img = QImage(self.current_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(qt_img)
-        
-        if w > self.image_label.width():
-             pixmap = pixmap.scaled(self.image_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-             
-        self.image_label.setPixmap(pixmap)
-
-    def _enhance_image(self):
-        if self.current_image is not None:
-            self.current_image = self.image_processor.enhance_for_ocr(self.current_image)
-            self._display_current()
-
-    def _run_ocr(self):
-        """Step 3: Trigger OCR in Background Thread"""
-        if self.current_image is None: return
-        
-        self.text_area.setPlaceholderText("Reading document... please wait...")
-        self.ocr_btn.setEnabled(False)
-        self.ocr_btn.setText("⏳ Reading...")
-        
-        # 1. Get Config
-        lang_map = {
-            "English (eng)": "eng",
-            "Spanish (spa)": "spa", 
-            "Hindi (hin)": "hin+eng"
-        }
-        lang_code = lang_map.get(self.lang_combo.currentText(), "eng")
-        
-        # 2. Setup Thread & Worker
-        self.ocr_thread = QThread()
-        self.worker = OCRWorker(self.ocr_service, self.current_image, lang_code)
-        self.worker.moveToThread(self.ocr_thread)
-        
-        # 3. Connect Signals
-        self.ocr_thread.started.connect(self.worker.run)
-        self.worker.finished.connect(self._on_ocr_finished)
-        self.worker.error.connect(self._on_ocr_error)
-        
-        # Cleanup
-        self.worker.finished.connect(self.ocr_thread.quit)
+        # Clear old AI cards
+        while self.ai_layout.count():
+            child = self.ai_layout.takeAt(0)
+            if child.widget(): child.widget().deleteLater()
+            
+        self.thread = QThread()
+        self.worker = ProcessingWorker(self.ocr_service, self.analysis_service, image)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self._on_process_finished)
+        self.worker.error.connect(self._on_process_error)
+        self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
-        self.ocr_thread.finished.connect(self.ocr_thread.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.start()
+
+    def _on_process_finished(self, text, insights):
+        self.text_editor.setEnabled(True)
+        self.text_editor.setText(text)
         
-        # 4. Start
-        self.ocr_thread.start()
-
-    def _on_ocr_finished(self, text):
-        """Called when background thread finishes successfully"""
-        self.text_area.setText(text)
-        self._reset_ocr_ui()
-
-    def _on_ocr_error(self, error_msg):
-        """Called if background thread crashes"""
-        self.text_area.setText(f"❌ Error: {error_msg}\n\nCheck logs or language data.")
-        self._reset_ocr_ui()
-
-    def _reset_ocr_ui(self):
-        """Helper to reset button state"""
-        self.ocr_btn.setEnabled(True)
-        self.ocr_btn.setText("🔍 Extract Text")
-
-    def reset_state(self):
-        self.current_image = None
-        self.original_image = None
-        self.image_label.clear()
-        self.image_label.setText("📄\n\nNo Document\nLoaded")
-        self.text_area.clear()
+        if not insights:
+            lbl = QLabel("No specific medical terms detected.")
+            lbl.setStyleSheet("color: #999; font-style: italic; border: none;")
+            self.ai_layout.addWidget(lbl)
         
-        self.image_label.setStyleSheet("""
-            background-color: #EEF0F4; border: 2px dashed #B0BEC5;
-            border-radius: 10px; color: #78909C; font-size: 16px; font-weight: bold;
-        """)
-        
-        self.enhance_btn.setEnabled(False)
-        self.ocr_btn.setEnabled(False)
-        self.reset_btn.setEnabled(False)
+        for data in insights:
+            card = InsightCard(data['title'], data['desc'], data['type'])
+            self.ai_layout.addWidget(card)
+        self.ai_layout.addStretch()
+
+    def _on_process_error(self, err):
+        self.text_editor.setText(f"❌ Error: {err}")
+        self.text_editor.setEnabled(True)
+
+    def _reset_app(self):
+        self.stack.setCurrentIndex(0)
+        self.text_editor.clear()
