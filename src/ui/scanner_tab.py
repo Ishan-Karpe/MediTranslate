@@ -1,7 +1,9 @@
 """
 src/ui/scanner_tab.py
-The "Intelligent Assistant" UI Layout.
-Features: Language Selection + Real AI Translation.
+Final MVP Version:
+- Fixes Duplicate Cards (Blood Pressure appearing twice)
+- Translates Titles (Headings) + Descriptions
+- Robust Container Layout
 """
 from pathlib import Path
 import cv2
@@ -35,16 +37,40 @@ class ProcessingWorker(QObject):
     def run(self):
         try:
             # 1. OCR (Read English Text)
-            # We assume input doc is English for Day 3 MVP
             raw_text = self.ocr.extract_text(self.image, lang='eng')
             
-            # 2. Translate (Real AI)
+            # 2. Translate Document
             translated_text = self.analysis.translate_content(raw_text, self.target_lang)
             
-            # 3. Insights (Analyze English text for keywords)
-            insights = self.analysis.analyze_text(raw_text)
+            # 3. Get Insights (English)
+            raw_insights = self.analysis.analyze_text(raw_text)
             
-            self.finished.emit(translated_text, insights)
+            # 4. PROCESS INSIGHTS (Translate + Deduplicate)
+            final_insights = []
+            seen_titles = set()
+            
+            for item in raw_insights:
+                title = item['title']
+                
+                # A. Deduplication Logic
+                # If we already have a card with this title, skip it.
+                # This prevents "Blood Pressure" (Info) and "Blood Pressure" (Warning) from stacking.
+                if title in seen_titles:
+                    continue
+                seen_titles.add(title)
+                
+                # B. Translate Title (Heading)
+                # Translating short titles is fast
+                trans_title = self.analysis.translate_content(title, self.target_lang)
+                item['title'] = trans_title
+                
+                # C. Translate Description
+                trans_desc = self.analysis.translate_content(item['desc'], self.target_lang)
+                item['desc'] = trans_desc
+                
+                final_insights.append(item)
+            
+            self.finished.emit(translated_text, final_insights)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -57,10 +83,14 @@ class InsightCard(QFrame):
         self.setMinimumHeight(80)
         
         layout = QVBoxLayout(self)
+        
+        # Title (Bold)
         lbl_title = QLabel(title)
+        lbl_title.setWordWrap(True)
         lbl_title.setStyleSheet("font-weight: bold; font-size: 14px; color: #333; border: none;")
         layout.addWidget(lbl_title)
         
+        # Description
         lbl_desc = QLabel(desc)
         lbl_desc.setWordWrap(True)
         lbl_desc.setStyleSheet("color: #555; font-size: 12px; border: none;")
@@ -92,21 +122,17 @@ class ScannerTab(QWidget):
         lbl_welcome.setObjectName("TitleLabel")
         lbl_welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        lbl_sub = QLabel("Select target language and upload document.")
+        lbl_sub = QLabel("Select language and upload document.")
         lbl_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_sub.setStyleSheet("color: #666; font-size: 16px;")
         
-        # Language Selector
         self.lang_select = QComboBox()
         self.lang_select.addItems(["Spanish", "Hindi"])
         self.lang_select.setFixedSize(300, 50)
-        self.lang_select.setObjectName("LangSelect")
         self.lang_select.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.lang_select.setObjectName("LangSelect")
         
-        # Buttons
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(20)
-        
         self.btn_upload = QPushButton("📂 Upload File")
         self.btn_upload.setFixedSize(200, 60)
         self.btn_upload.setObjectName("BigButton")
@@ -127,22 +153,25 @@ class ScannerTab(QWidget):
         upload_layout.addStretch()
         upload_layout.addWidget(lbl_welcome)
         upload_layout.addWidget(lbl_sub)
-        upload_layout.addWidget(self.lang_select, alignment=Qt.AlignmentFlag.AlignCenter) # Added Selector
+        upload_layout.addWidget(self.lang_select, alignment=Qt.AlignmentFlag.AlignCenter)
         upload_layout.addLayout(btn_layout)
         upload_layout.addStretch()
         
         # === VIEW 2: RESULTS ===
         self.view_results = QWidget()
+        
+        # Main Wrapper
         wrapper = QVBoxLayout(self.view_results)
         wrapper.setContentsMargins(20, 20, 20, 20)
         wrapper.setSpacing(20)
 
+        # Columns Wrapper
         results_container = QWidget()
         results_layout = QHBoxLayout(results_container)
         results_layout.setContentsMargins(0, 0, 0, 0)
-        results_layout.setSpacing(20)
+        results_layout.setSpacing(30)
         
-        # Left: Translation
+        # LEFT COLUMN (Text)
         left_col = QVBoxLayout()
         self.lbl_res_title = QLabel("TRANSLATED DOCUMENT")
         self.lbl_res_title.setStyleSheet("font-weight: bold; color: #2E7D32; letter-spacing: 1px;")
@@ -155,7 +184,7 @@ class ScannerTab(QWidget):
         left_col.addWidget(self.lbl_res_title)
         left_col.addWidget(self.text_editor)
         
-        # Right: AI Cards
+        # RIGHT COLUMN (AI Cards)
         right_col = QVBoxLayout()
         lbl_ai_title = QLabel("AI MEDICAL INSIGHTS")
         lbl_ai_title.setStyleSheet("font-weight: bold; color: #1565C0; letter-spacing: 1px;")
@@ -176,11 +205,14 @@ class ScannerTab(QWidget):
         right_col.addWidget(lbl_ai_title)
         right_col.addWidget(self.ai_scroll)
         
+        # Add columns
         results_layout.addLayout(left_col, stretch=60)
         results_layout.addLayout(right_col, stretch=40)
         
+        # Add to main wrapper
         wrapper.addWidget(results_container, stretch=1)
         
+        # Reset Button
         self.btn_reset = QPushButton("❌ Scan New Document")
         self.btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_reset.setObjectName("ResetButton")
@@ -195,10 +227,12 @@ class ScannerTab(QWidget):
         self.setStyleSheet("""
             QWidget { background-color: #F5F7FA; font-family: 'Segoe UI', sans-serif; }
             QLabel#TitleLabel { font-size: 32px; font-weight: bold; color: #263238; }
+            
             QComboBox#LangSelect {
                 border: 2px solid #CFD8DC; border-radius: 8px; padding: 10px;
                 background: white; font-size: 16px; font-weight: bold; color: #455A64;
             }
+            
             QPushButton#BigButton {
                 background-color: white; border: 2px solid #CFD8DC;
                 border-radius: 12px; font-size: 16px; font-weight: bold; color: #455A64;
@@ -206,19 +240,25 @@ class ScannerTab(QWidget):
             QPushButton#BigButton:hover {
                 background-color: #E3F2FD; border-color: #2196F3; color: #1976D2;
             }
+            
             QTextEdit#Editor {
                 border: none; border-radius: 12px; background-color: white;
                 padding: 20px; font-size: 16px; line-height: 1.5; color: #37474F;
-                font-family: 'Noto Sans Devanagari', 'Noto Sans', sans-serif;
+                font-family: 'Noto Sans', 'Noto Sans Devanagari', sans-serif;
             }
+            
             QPushButton#ResetButton {
                 background-color: #FFEBEE; color: #D32F2F; border: none;
                 padding: 12px 24px; border-radius: 6px; font-weight: bold;
             }
             QPushButton#ResetButton:hover { background-color: #FFCDD2; }
+            
             QFrame#Card_info { background-color: white; border-left: 4px solid #2196F3; border-radius: 4px; padding: 10px; }
             QFrame#Card_warning { background-color: #FFF8E1; border-left: 4px solid #FFC107; border-radius: 4px; padding: 10px; }
             QFrame#Card_drug { background-color: #E8F5E9; border-left: 4px solid #4CAF50; border-radius: 4px; padding: 10px; }
+            
+            QScrollBar:vertical { border: none; background: #E0E0E0; width: 10px; margin: 0px; border-radius: 5px; }
+            QScrollBar::handle:vertical { background: #90A4AE; min-height: 30px; border-radius: 5px; }
         """)
 
     def _upload_image(self):
@@ -243,17 +283,16 @@ class ScannerTab(QWidget):
     def _start_processing(self, image):
         target = self.lang_select.currentText()
         self.stack.setCurrentIndex(1)
-        self.text_editor.setText(f"⏳ Reading Document & Translating to {target}...\n(First time load may take 10 seconds)")
+        self.text_editor.setText(f"⏳ Reading, Analyzing & Translating to {target}...")
         self.lbl_res_title.setText(f"TRANSLATED DOCUMENT ({target.upper()})")
         self.text_editor.setEnabled(False)
-        self.btn_reset.setEnabled(False) # Lock reset during process
+        self.btn_reset.setEnabled(False)
         
         while self.ai_layout.count():
             child = self.ai_layout.takeAt(0)
             if child.widget(): child.widget().deleteLater()
             
         self.thread = QThread()
-        # Pass target language to worker
         self.worker = ProcessingWorker(self.ocr_service, self.analysis_service, image, target)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)

@@ -1,49 +1,159 @@
 """
 src/services/analysis_service.py
-Orchestrates Translation and Contextual Analysis.
+The Intelligence Layer.
+Features: Primary Brain (Curated) + Backup Brain (ICD-10) + Regex Rules.
 """
+import json
+import re
+from pathlib import Path
 from loguru import logger
 from services.translation_service import TranslationService
 
 class AnalysisService:
     def __init__(self):
-        # 1. Try to load Translator, but expect failure
+        # 1. Initialize Translator
         self.translator = None
         self.init_error = None
-        
         try:
             self.translator = TranslationService()
         except Exception as e:
             self.init_error = str(e)
-            logger.error(f"CRITICAL: TranslationService failed to start. {e}")
+            logger.error(f"Translator failed to start: {e}")
+
+        # 2. Load Knowledge Bases
+        self.primary_glossary = {}
+        self.backup_glossary = {} 
         
-        # Medical Keywords (same as before)
-        self.medical_db = {
-            "mg": {"title": "Milligrams", "desc": "Unit of measurement.", "type": "info"},
-            "tablet": {"title": "Tablet", "desc": "Solid pill.", "type": "info"},
-            "daily": {"title": "Daily", "desc": "Once every 24 hours.", "type": "warning"},
-            "amoxicillin": {"title": "Amoxicillin", "desc": "Antibiotic.", "type": "drug"},
-            "hypertension": {"title": "Hypertension", "desc": "High blood pressure.", "type": "warning"},
-            "fever": {"title": "Fever", "desc": "High body temp.", "type": "warning"}
-        }
+        self._load_primary_glossary()
+        self._load_backup_glossary()
+
+    def _load_primary_glossary(self):
+        """Loads your hand-written, easy-to-understand glossary."""
+        try:
+            # Current file: src/services/analysis_service.py
+            # Go up to src/data/medical_glossary.json
+            base_path = Path(__file__).parent.parent 
+            path = base_path / "data" / "medical_glossary.json"
+            
+            if path.exists():
+                with open(path, 'r', encoding='utf-8') as f:
+                    self.primary_glossary = json.load(f)
+                
+                # Cleanup metadata if present
+                if "_meta" in self.primary_glossary:
+                    del self.primary_glossary["_meta"]
+                    
+                logger.info(f"🧠 Primary Brain loaded: {len(self.primary_glossary)} terms.")
+            else:
+                logger.warning(f"⚠️ Primary glossary not found at {path}")
+                self.primary_glossary = {"mg": {"title": "Milligrams", "desc": "Dosage unit", "type": "info"}}
+        except Exception as e:
+            logger.error(f"Primary glossary error: {e}")
+
+    def _load_backup_glossary(self):
+        """Loads the massive ICD-10 dataset."""
+        try:
+            base_path = Path(__file__).parent.parent
+            path = base_path / "data" / "codes_glossary.json"
+            
+            if path.exists():
+                with open(path, 'r', encoding='utf-8') as f:
+                    raw_data = json.load(f)
+                    
+                    # FIX IS HERE: Handle List of Dictionaries
+                    # Expected format: [{"code": "A00", "description": "Cholera"}, ...]
+                    if isinstance(raw_data, list):
+                        for item in raw_data:
+                            # Robust check for dictionary keys
+                            if isinstance(item, dict):
+                                code = item.get("code")
+                                desc = item.get("description")
+                                if code and desc:
+                                    self.backup_glossary[code] = desc
+                            
+                            # Fallback for List-of-Lists (just in case)
+                            elif isinstance(item, list) and len(item) >= 2:
+                                self.backup_glossary[item[0]] = item[1]
+                                
+                    # Fallback for pure Dict format
+                    elif isinstance(raw_data, dict):
+                        self.backup_glossary = raw_data
+                        
+                logger.info(f"📚 Backup Brain loaded: {len(self.backup_glossary)} terms.")
+            else:
+                logger.warning(f"⚠️ Backup glossary not found at {path}")
+        except Exception as e:
+            logger.error(f"Backup glossary error: {e}")
 
     def analyze_text(self, text: str):
-        found = []
-        for k, v in self.medical_db.items():
-            if k in text.lower(): found.append(v)
-        return found
+        """
+        Scans text using Primary Brain -> Regex -> Backup Brain.
+        """
+        insights = []
+        text_lower = text.lower()
+        found_terms = set() 
+        
+        # --- PHASE 1: PRIMARY BRAIN ---
+        for term, data in self.primary_glossary.items():
+            pattern = r'\b' + re.escape(term) + r'\b'
+            if re.search(pattern, text_lower):
+                if term not in found_terms:
+                    insights.append(data)
+                    found_terms.add(term)
+
+        # --- PHASE 2: REGEX PATTERNS ---
+        if re.search(r'\b\d{2,3}/\d{2,3}\b', text):
+            insights.append({
+                "title": "Blood Pressure", 
+                "desc": "Systolic/Diastolic readings. Normal is ~120/80.", 
+                "type": "warning"
+            })
+            
+        if re.search(r'\b(99\.[5-9]|1\d{2}(\.\d)?)\s*F\b', text, re.IGNORECASE) or \
+           re.search(r'\b(3[7-9](\.\d)?|4\d(\.\d)?)\s*C\b', text, re.IGNORECASE):
+            insights.append({
+                "title": "Fever Detected", 
+                "desc": "High body temperature detected.", 
+                "type": "warning"
+            })
+            
+        if re.search(r'\btake\s+\d+(\.\d)?\s+(tablets|pills|capsules)', text_lower):
+            insights.append({
+                "title": "Dosage Instruction", 
+                "desc": "Specific instruction on how many pills to take.", 
+                "type": "info"
+            })
+
+        # --- PHASE 3: BACKUP BRAIN (ICD-10) ---
+        count = 0
+        limit = 3 
+        
+        for code, desc in self.backup_glossary.items():
+            if count >= limit: break
+            
+            # Simple substring match
+            if len(desc) > 4 and desc.lower() in text_lower:
+                
+                # Check duplication against Primary Brain results
+                already_found = False
+                for t in found_terms:
+                    if t in desc.lower(): already_found = True
+                
+                if not already_found:
+                    insights.append({
+                        "title": f"{desc.title()} ({code})",
+                        "desc": "Medical diagnosis detected via International Database.",
+                        "type": "warning"
+                    })
+                    found_terms.add(desc.lower())
+                    count += 1
+            
+        return insights
 
     def translate_content(self, text: str, target_lang: str) -> str:
-        logger.info(f"Translating to {target_lang}...")
-        
-        # 2. SAFETY CHECK: If translator failed to load, return the error to the UI
         if self.translator is None:
-            error_msg = f"[System Error]: Translator not active.\nReason: {self.init_error}"
-            logger.warning(error_msg)
-            return error_msg
-
+            return f"[System Error]: Translator not active.\nReason: {self.init_error}"
         try:
             return self.translator.translate(text, target_lang)
         except Exception as e:
-            logger.error(f"Translation runtime error: {e}")
             return f"[Error]: {str(e)}"
