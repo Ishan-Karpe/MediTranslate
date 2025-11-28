@@ -1,7 +1,12 @@
 """
 src/services/analysis_service.py
 The Intelligence Layer.
-Features: Primary Brain (Curated) + Backup Brain (ICD-10) + Regex Rules.
+Features: 
+- Document Classification (detect_document_type)
+- Primary Brain (Curated Glossary)
+- Backup Brain (ICD-10) 
+- Regex Pattern Matching
+- Translation Wrapper
 """
 import json
 import re
@@ -30,8 +35,6 @@ class AnalysisService:
     def _load_primary_glossary(self):
         """Loads your hand-written, easy-to-understand glossary."""
         try:
-            # Current file: src/services/analysis_service.py
-            # Go up to src/data/medical_glossary.json
             base_path = Path(__file__).parent.parent 
             path = base_path / "data" / "medical_glossary.json"
             
@@ -45,7 +48,6 @@ class AnalysisService:
                     
                 logger.info(f"🧠 Primary Brain loaded: {len(self.primary_glossary)} terms.")
             else:
-                logger.warning(f"⚠️ Primary glossary not found at {path}")
                 self.primary_glossary = {"mg": {"title": "Milligrams", "desc": "Dosage unit", "type": "info"}}
         except Exception as e:
             logger.error(f"Primary glossary error: {e}")
@@ -60,22 +62,18 @@ class AnalysisService:
                 with open(path, 'r', encoding='utf-8') as f:
                     raw_data = json.load(f)
                     
-                    # FIX IS HERE: Handle List of Dictionaries
-                    # Expected format: [{"code": "A00", "description": "Cholera"}, ...]
+                    # Handle List of Dictionaries
                     if isinstance(raw_data, list):
                         for item in raw_data:
-                            # Robust check for dictionary keys
                             if isinstance(item, dict):
                                 code = item.get("code")
                                 desc = item.get("description")
                                 if code and desc:
                                     self.backup_glossary[code] = desc
-                            
-                            # Fallback for List-of-Lists (just in case)
                             elif isinstance(item, list) and len(item) >= 2:
                                 self.backup_glossary[item[0]] = item[1]
                                 
-                    # Fallback for pure Dict format
+                    # Handle pure Dict
                     elif isinstance(raw_data, dict):
                         self.backup_glossary = raw_data
                         
@@ -84,6 +82,27 @@ class AnalysisService:
                 logger.warning(f"⚠️ Backup glossary not found at {path}")
         except Exception as e:
             logger.error(f"Backup glossary error: {e}")
+
+    def detect_document_type(self, text: str) -> str:
+        """
+        Classifies the document based on keywords.
+        """
+        text_lower = text.lower()
+        
+        # Simple Keyword Voting
+        if any(x in text_lower for x in ["rx", "prescription", "pharmacy", "take", "daily", "tablet"]):
+            return "Prescription / Medication List"
+        
+        if any(x in text_lower for x in ["lab", "metabolic", "count", "positive", "negative", "range", "result"]):
+            return "Laboratory Report"
+            
+        if any(x in text_lower for x in ["discharge", "summary", "admitted", "hospital", "instructions"]):
+            return "Discharge Summary"
+            
+        if any(x in text_lower for x in ["diagnosis", "history", "assessment", "plan"]):
+            return "Clinical Note"
+            
+        return "General Medical Document"
 
     def analyze_text(self, text: str):
         """
@@ -131,10 +150,7 @@ class AnalysisService:
         for code, desc in self.backup_glossary.items():
             if count >= limit: break
             
-            # Simple substring match
             if len(desc) > 4 and desc.lower() in text_lower:
-                
-                # Check duplication against Primary Brain results
                 already_found = False
                 for t in found_terms:
                     if t in desc.lower(): already_found = True
