@@ -1,9 +1,10 @@
 """
 src/ui/scanner_tab.py
-Final Integration:
-- Connects UI to Google Gemini 3 (via AIAssistant service).
-- Handles threaded AI queries to prevent freezing.
-- Displays Markdown-formatted AI responses.
+Final Production Version.
+- AI Assistant Integration (Gemini 1.5 Flash)
+- Threaded Processing
+- Fixes 'reset_state' crash
+- Fixes Font Rendering Order
 """
 from pathlib import Path
 import cv2
@@ -20,12 +21,11 @@ from PySide6.QtCore import Qt, Signal, QThread, QObject
 # Services
 from services.ocr_service import OCRService
 from services.analysis_service import AnalysisService
-from services.ai_assistant import AIAssistant  # <--- NEW SERVICE
+from services.ai_assistant import AIAssistant
 from utils.image_processing import ImageProcessor
 
 # --- WORKER 1: OCR & TRANSLATION ---
 class ProcessingWorker(QObject):
-    # Returns: (TranslatedText, DocType, InsightsList, RawEnglishText)
     finished = Signal(str, str, list, str) 
     error = Signal(str)
 
@@ -40,22 +40,18 @@ class ProcessingWorker(QObject):
         try:
             # 1. OCR
             raw_text = self.ocr.extract_text(self.image, lang='eng')
-            
             # 2. Detect Type
             doc_type = self.analysis.detect_document_type(raw_text)
-            
             # 3. Translate
             translated_text = self.analysis.translate_content(raw_text, self.target_lang)
-            
-            # 4. Analyze (Get terms for the dropdown)
+            # 4. Analyze
             insights = self.analysis.analyze_text(raw_text)
             
-            # Pass everything back, including raw text for the AI context
             self.finished.emit(translated_text, doc_type, insights, raw_text)
         except Exception as e:
             self.error.emit(str(e))
 
-# --- WORKER 2: AI QUERY (GEMINI) ---
+# --- WORKER 2: AI QUERY ---
 class AIQueryWorker(QObject):
     finished = Signal(str)
     
@@ -68,7 +64,6 @@ class AIQueryWorker(QObject):
         self.lang = lang
 
     def run(self):
-        # Calls the Google GenAI SDK
         response = self.ai.explain_term(self.term, self.local_def, self.context, self.lang)
         self.finished.emit(response)
 
@@ -78,10 +73,9 @@ class ScannerTab(QWidget):
         super().__init__()
         self.ocr_service = OCRService()
         self.analysis_service = AnalysisService()
-        self.ai_assistant = AIAssistant() # <--- Initialize Gemini Client
+        self.ai_assistant = AIAssistant()
         self.image_processor = ImageProcessor()
         
-        # State Data
         self.raw_text_cache = ""
         self.found_insights_cache = []
         
@@ -94,7 +88,7 @@ class ScannerTab(QWidget):
         self.stack = QStackedWidget()
         self.main_layout.addWidget(self.stack)
         
-        # === VIEW 1: UPLOAD ===
+        # VIEW 1: UPLOAD
         self.view_upload = QWidget()
         upload_layout = QVBoxLayout(self.view_upload)
         upload_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -132,7 +126,7 @@ class ScannerTab(QWidget):
         upload_layout.addLayout(btn_layout)
         upload_layout.addStretch()
         
-        # === VIEW 2: RESULTS ===
+        # VIEW 2: RESULTS
         self.view_results = QWidget()
         wrapper = QVBoxLayout(self.view_results)
         wrapper.setContentsMargins(20, 20, 20, 20)
@@ -141,7 +135,7 @@ class ScannerTab(QWidget):
         results_layout = QHBoxLayout(results_container)
         results_layout.setSpacing(30)
         
-        # --- LEFT: TRANSLATED DOC ---
+        # LEFT: DOC
         left_col = QVBoxLayout()
         self.lbl_res_title = QLabel("TRANSLATED DOCUMENT")
         self.lbl_res_title.setStyleSheet("font-weight: bold; color: #2E7D32;")
@@ -154,12 +148,11 @@ class ScannerTab(QWidget):
         left_col.addWidget(self.lbl_res_title)
         left_col.addWidget(self.text_editor)
         
-        # --- RIGHT: AI CARETAKER PANEL ---
+        # RIGHT: AI PANEL
         right_col = QVBoxLayout()
         lbl_ai_title = QLabel("🤖 AI MEDICAL GUIDE")
         lbl_ai_title.setStyleSheet("font-weight: bold; color: #1565C0;")
         
-        # 1. Question Box
         question_box = QGroupBox("What confuses you?")
         question_box.setObjectName("AIBox")
         q_layout = QVBoxLayout(question_box)
@@ -168,7 +161,7 @@ class ScannerTab(QWidget):
         self.term_selector.setPlaceholderText("Select a medical term...")
         self.term_selector.setObjectName("TermSelect")
         
-        self.btn_explain = QPushButton("✨ Explain & Guide Me")
+        self.btn_explain = QPushButton("Explain")
         self.btn_explain.setObjectName("ActionButton")
         self.btn_explain.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_explain.clicked.connect(self._ask_ai)
@@ -176,9 +169,8 @@ class ScannerTab(QWidget):
         q_layout.addWidget(self.term_selector)
         q_layout.addWidget(self.btn_explain)
         
-        # 2. Answer Area (Displays Markdown)
         self.ai_response_area = QTextEdit()
-        self.ai_response_area.setPlaceholderText("Select a term above to get a personalized explanation from Gemini AI...")
+        self.ai_response_area.setPlaceholderText("Select a term above...")
         self.ai_response_area.setReadOnly(True)
         self.ai_response_area.setObjectName("AIResponse")
         
@@ -194,7 +186,7 @@ class ScannerTab(QWidget):
         # Bottom: Reset
         self.btn_reset = QPushButton("❌ Scan New Document")
         self.btn_reset.setObjectName("ResetButton")
-        self.btn_reset.clicked.connect(self._reset_app)
+        self.btn_reset.clicked.connect(self.reset_state) # FIXED: Name matches MainWindow now
         wrapper.addWidget(self.btn_reset, alignment=Qt.AlignmentFlag.AlignRight)
         
         self.stack.addWidget(self.view_upload)
@@ -214,10 +206,11 @@ class ScannerTab(QWidget):
             
             QTextEdit#Editor {
                 border: none; border-radius: 12px; background-color: white; padding: 20px;
-                font-family: 'Noto Sans', 'Noto Sans Devanagari', sans-serif; font-size: 14px;
+                /* FONT FIX: Devanagari FIRST to prevent font error */
+                font-family: 'Noto Sans Devanagari', 'Noto Sans', sans-serif; 
+                font-size: 14px;
             }
             
-            /* AI Panel Styles */
             QGroupBox#AIBox {
                 font-weight: bold; border: 1px solid #CFD8DC; border-radius: 8px; 
                 background-color: white; padding-top: 20px; margin-top: 10px;
@@ -230,7 +223,9 @@ class ScannerTab(QWidget):
             
             QTextEdit#AIResponse {
                 border: none; background-color: #F3E5F5; border-radius: 12px;
-                padding: 15px; color: #4A148C; font-family: 'Noto Sans', 'Noto Sans Devanagari', sans-serif;
+                padding: 15px; color: #4A148C;
+                /* FONT FIX: Devanagari FIRST here too */
+                font-family: 'Noto Sans Devanagari', 'Noto Sans', sans-serif;
                 font-size: 14px; margin-top: 10px;
             }
             
@@ -282,7 +277,6 @@ class ScannerTab(QWidget):
         self.raw_text_cache = raw_text
         self.found_insights_cache = insights
         
-        # Populate Dropdown with found medical terms
         seen = set()
         for item in insights:
             if item['title'] not in seen:
@@ -302,11 +296,9 @@ class ScannerTab(QWidget):
         self.text_editor.setEnabled(True)
 
     def _ask_ai(self):
-        """Triggers the Gemini Thread."""
         term = self.term_selector.currentText()
         target_lang = self.lang_select.currentText()
         
-        # Find the local definition to help Gemini context
         local_def = "Medical term found in document."
         for item in self.found_insights_cache:
             if item['title'] == term:
@@ -327,10 +319,11 @@ class ScannerTab(QWidget):
         self.ai_thread.start()
 
     def _on_ai_finished(self, response):
-        # Renders Markdown properly (Bold, bullet points)
         self.ai_response_area.setMarkdown(response)
         self.btn_explain.setEnabled(True)
 
-    def _reset_app(self):
+    # FIXED: Renamed to match what MainWindow expects
+    def reset_state(self):
         self.stack.setCurrentIndex(0)
         self.text_editor.clear()
+        self.ai_response_area.clear()

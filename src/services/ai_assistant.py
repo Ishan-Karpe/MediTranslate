@@ -64,7 +64,7 @@ class AIAssistant:
             # 4. Generate Content (Dictionary Config)
             # FIX: We use a simple dict instead of 'types.GenerateContentConfig'
             response = self.client.models.generate_content(
-                model="gemini-2.0-flash-exp", # Fast & Smart
+                model="gemini-flash-latest",
                 contents=prompt,
                 config={
                     'temperature': 0.7, 
@@ -85,7 +85,7 @@ class AIAssistant:
         try:
             logger.warning("Gemini 2.0 failed, falling back to 1.5 Flash...")
             response = self.client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-flash-lite-latest",
                 contents=prompt,
                 config={'temperature': 0.7}
             )
