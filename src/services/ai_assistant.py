@@ -38,7 +38,7 @@ class AIAssistant:
 
         # 3. Construct the Prompt
         prompt = f"""
-        You are a kind, empathetic medical assistant helping a patient understand their medical document.
+        Act as a kind, empathetic medical assistant helping a patient understand their medical document. 
         
         TASK: Explain the term "{term}" to the patient.
         
@@ -54,20 +54,18 @@ class AIAssistant:
            - **What is it?** (Simple explanation)
            - **Why is it here?** (Context from the document)
            - **Next Steps:** (Actionable advice, e.g. "Take with food")
-           - **Check-in:** Ask 1 simple question to check how they feel.
+           - **Check-in:** Ask 1 or more simple questions to check how they feel.
         4. **Safety:** Do NOT diagnose. Always refer to their actual doctor.
         
         Generate the response strictly in {target_lang}.
         """
         
         try:
-            # 4. Generate Content (Dictionary Config)
-            # FIX: We use a simple dict instead of 'types.GenerateContentConfig'
             response = self.client.models.generate_content(
                 model="gemini-flash-latest",
                 contents=prompt,
                 config={
-                    'temperature': 0.7, 
+                    'temperature': 0.75, 
                 }
             )
             
@@ -75,19 +73,17 @@ class AIAssistant:
             
         except Exception as e:
             logger.error(f"AI Generation failed: {e}")
-            # Fallback logic if 2.0 is not available for your key
             if "404" in str(e) or "not found" in str(e).lower():
                 return self._fallback_generation(prompt)
             return f"Error connecting to AI: {str(e)}"
 
     def _fallback_generation(self, prompt):
-        """Fallback to 1.5 Flash."""
         try:
-            logger.warning("Gemini 2.0 failed, falling back to 1.5 Flash...")
+            logger.warning("Gemini Flash failed, falling back to Flash Lite...")
             response = self.client.models.generate_content(
                 model="gemini-flash-lite-latest",
                 contents=prompt,
-                config={'temperature': 0.7}
+                config={'temperature': 0.75}
             )
             return response.text
         except Exception as e:
