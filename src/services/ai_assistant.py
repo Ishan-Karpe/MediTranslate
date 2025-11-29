@@ -38,26 +38,32 @@ class AIAssistant:
 
         # 3. Construct the Prompt
         prompt = f"""
-        Act as a kind, empathetic medical assistant helping a patient understand their medical document. 
+        Act as a warm, culturally sensitive medical guide for a patient who speaks {target_lang}.
         
         TASK: Explain the term "{term}" to the patient.
         
         CONTEXT:
-        - Patient Language: {target_lang} (OUTPUT MUST BE IN THIS LANGUAGE)
-        - Document Excerpt: "{full_context[:1500]}..." 
+        - Document Excerpt: "{full_context[:2000]}..." 
         - Technical Definition: "{local_def}"
         
-        GUIDELINES:
-        1. **Tone:** Reassuring, calm, and clear. Avoid scary medical jargon.
-        2. **Format:** Use Markdown (Bold headers, bullet points).
-        3. **Structure:**
-           - **What is it?** (Simple explanation)
-           - **Why is it here?** (Context from the document)
-           - **Next Steps:** (Actionable advice, e.g. "Take with food")
-           - **Check-in:** Ask 1 or more simple questions to check how they feel.
-        4. **Safety:** Do NOT diagnose. Always refer to their actual doctor.
+        CULTURAL GUIDELINES:
+        1. **Reassurance:** Medical terms can be scary. Use calming language.
+        2. **Simplicity:** Use analogies relevant to daily life (e.g., "Like a filter getting clogged" for kidney issues).
+        3. **Respect:** If the condition carries social stigma, address it with privacy and dignity.
+        4. **Action:** Focus on what they can DO (diet, rest), not just the pathology.
         
-        Generate the response strictly in {target_lang}.
+        OUTPUT FORMAT (Strictly follow this):
+        
+        ### {target_lang} Explanation followed by English Explanation:
+
+        ### {target_lang} Explanation
+        (Translate the above, but adapt the tone to be culturally appropriate and respectful in {target_lang}.)
+
+
+        ### English Explanation
+        * **What is it?** (Simple explanation)
+        * **Why is it here?** (Context from doc)
+        * **Advice:** (Actionable steps)
         """
         
         try:
