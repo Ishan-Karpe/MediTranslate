@@ -344,7 +344,7 @@ wheels = [
 [[package]]
 name = "meditranslate"
 version = "1.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "google" },
     { name = "google-genai" },

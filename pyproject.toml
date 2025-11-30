@@ -1,7 +1,11 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "MediTranslate"
 version = "1.0.0"
-description = "A simple, private, and offline medical translation tool that scans medical documents and provides translated + explained versions."
+description = "A simple, private, and offline medical translation tool."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -22,4 +26,26 @@ dependencies = [
     "sentencepiece>=0.2.1",
     "torch>=2.9.1",
     "transformers>=4.57.1",
+]
+
+[project.scripts]
+meditranslate = "meditranslate.main:main"
+
+# --- THE FIX FOR FILE SIZE ---
+[tool.hatch.build]
+# Global exclude list (regex supported)
+exclude = [
+  "**/resources/models",
+  "**/*.safetensors",
+  "**/*.bin",
+  "**/*.spm",
+  ".env",
+  "meditranslate.spec",
+  "build_app.py"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/meditranslate"]
+exclude = [
+  "src/meditranslate/resources/models"
 ]

@@ -23,7 +23,7 @@ class PDFService:
         self.fonts = {'Hindi': 'Helvetica', 'Latin': 'Helvetica'}
         
         try:
-            font_dir = get_resource_path("src/resources/fonts")
+            font_dir = get_resource_path("src/meditranslate/resources/fonts")
             
             # Register Hindi
             hindi_path = font_dir / "NotoSansDevanagari-Regular.ttf"

@@ -1,8 +1,3 @@
-"""
-build_app.py
-building the dist file for distrubution.
-"""
-
 import PyInstaller.__main__
 import os
 import shutil
@@ -15,8 +10,8 @@ def build():
     if Path("build").exists(): shutil.rmtree("build")
 
     add_data = [
-        (str(ROOT / 'src' / 'data'), 'src/data'),
-        (str(ROOT / 'src' / 'resources'), 'src/resources'),
+        (str(ROOT / 'src' / 'meditranslate' / 'data'), 'meditranslate/data'),
+        (str(ROOT / 'src' / 'meditranslate' / 'resources'), 'meditranslate/resources'),
         (str(ROOT / '.env'), '.') 
     ]
 
@@ -25,22 +20,23 @@ def build():
 
     print("Starting Build...")
     PyInstaller.__main__.run([
-        'src/main.py',                       
-        '--name=MediTranslate',              
-        '--windowed',                        
-        '--onedir',                          
+        'src/meditranslate/main.py',         
+        '--name=MediTranslate',
+        '--windowed',
+        '--onedir',
         '--clean',
         '--noconfirm',
         '--paths=src', 
-
+        
         *[f'--add-data={arg}' for arg in data_args],
         
+        # Hidden imports
         '--hidden-import=pdf2image',
         '--hidden-import=reportlab',
         '--hidden-import=pyside6',
-        '--hidden-import=PIL',
         '--hidden-import=cv2',
         '--hidden-import=numpy',
+        '--hidden-import=meditranslate', 
     ])
     
     print("\nBuild Complete! Check the 'dist/MediTranslate' folder.")

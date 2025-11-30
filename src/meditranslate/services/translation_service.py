@@ -12,7 +12,7 @@ class TranslationService:
         self.models = {} 
         self.tokenizers = {}
         
-        self.model_dir = get_resource_path("src/resources/models")
+        self.model_dir = get_resource_path("src/meditranslate/resources/models")
         
         self.model_map = {
             "Spanish": "Helsinki-NLP/opus-mt-en-es",
