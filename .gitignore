@@ -16,6 +16,9 @@ wheels/
 # Logs
 *.log
 
+# Binaries
+binaries/
+
 
 src/meditranslate/resources/models/
 

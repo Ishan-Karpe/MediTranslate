@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['src/main.py'],
-    pathex=['src'],
+    ['src/meditranslate/main.py'],
+    pathex=['src/meditranslate'],
     binaries=[],
-    datas=[('/home/ishan/Documents/MediTranslate/src/data', 'src/data'), ('/home/ishan/Documents/MediTranslate/src/resources', 'src/resources'), ('/home/ishan/Documents/MediTranslate/.env', '.')],
-    hiddenimports=['pdf2image', 'reportlab', 'pyside6', 'PIL', 'cv2', 'numpy'],
+    datas=[('/home/ishan/Documents/MediTranslate/src/meditranslate/data', 'meditranslate/data'), ('/home/ishan/Documents/MediTranslate/src/meditranslate/resources', 'meditranslate/resources'), ('/home/ishan/Documents/MediTranslate/.env', '.')],
+    hiddenimports=['pdf2image', 'reportlab', 'pyside6', 'cv2', 'numpy', 'ui', 'services', 'utils'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
