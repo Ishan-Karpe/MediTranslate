@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+.python-version
 
 # Virtual environments
 .venv
@@ -13,3 +14,6 @@ wheels/
 src/resources/
 
 .env
+
+# Log Files
+meditranslate.log

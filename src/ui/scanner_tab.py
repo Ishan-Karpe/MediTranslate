@@ -1,6 +1,8 @@
 """
 src/ui/scanner_tab.py
 The Complete "Intelligent Assistant" UI.
+500+ lines
+I used AI to help understand the code and fix some issues.
 Features:
 - PDF Input & Export (Bilingual)
 - AI Caretaker (Culturally Aware)
@@ -11,7 +13,6 @@ Features:
 from pathlib import Path
 import cv2
 import numpy as np
-from loguru import logger
 from pdf2image import convert_from_path
 
 from PySide6.QtWidgets import (
@@ -151,7 +152,7 @@ class ScannerTab(QWidget):
         self.view_upload = QWidget()
         upload_layout = QVBoxLayout(self.view_upload)
         upload_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        upload_layout.setSpacing(15) # Tighter spacing for the header group
+        upload_layout.setSpacing(15)
         
         # 1. Main Header
         lbl_welcome = QLabel("MediTranslate AI")
@@ -177,12 +178,12 @@ class ScannerTab(QWidget):
         # 5. Buttons (Enlarged)
         btn_layout = QHBoxLayout()
         self.btn_upload = QPushButton("📂 Upload File")
-        self.btn_upload.setFixedSize(250, 80) # Bigger
+        self.btn_upload.setFixedSize(200, 80)
         self.btn_upload.setObjectName("BigButton")
         self.btn_upload.clicked.connect(self._upload_file)
         
         self.btn_camera = QPushButton("📷 Use Camera")
-        self.btn_camera.setFixedSize(250, 80) # Bigger
+        self.btn_camera.setFixedSize(200, 80)
         self.btn_camera.setObjectName("BigButton")
         self.btn_camera.clicked.connect(self._capture_camera)
         
@@ -261,7 +262,7 @@ class ScannerTab(QWidget):
         sidebar_layout.setContentsMargins(20, 30, 20, 30)
         sidebar_layout.setSpacing(20)
         
-        lbl_ai_title = QLabel("🤖 AI MEDICAL GUIDE")
+        lbl_ai_title = QLabel("AI MEDICAL GUIDE")
         lbl_ai_title.setStyleSheet("font-weight: 900; color: #1565C0; font-size: 14px;")
         
         # 1. Interactive Question Box
@@ -273,7 +274,7 @@ class ScannerTab(QWidget):
         self.term_selector = QComboBox()
         self.term_selector.setObjectName("TermSelect")
         
-        self.btn_explain = QPushButton("✨ Explain & Guide Me")
+        self.btn_explain = QPushButton("✨ Guide Me")
         self.btn_explain.setObjectName("ActionButton")
         self.btn_explain.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_explain.clicked.connect(self._ask_ai)
@@ -403,7 +404,7 @@ class ScannerTab(QWidget):
         target = self.lang_select.currentText()
         use_contrast = self.chk_contrast.isChecked()
         self.stack.setCurrentIndex(1)
-        self.text_editor.setText(f"⏳ Processing...")
+        self.text_editor.setText(f"Processing...")
         self.term_selector.clear()
         self.ai_response_area.clear()
         self.btn_export.setEnabled(False)
@@ -476,7 +477,7 @@ class ScannerTab(QWidget):
                 local_def = item.get('trans_desc', '')
                 break
         
-        self.ai_response_area.setMarkdown(f"**⏳ Asking AI about '{term}'...**")
+        self.ai_response_area.setMarkdown(f"**Asking AI about '{term}'...**")
         self.btn_explain.setEnabled(False)
         
         self.ai_thread = QThread()

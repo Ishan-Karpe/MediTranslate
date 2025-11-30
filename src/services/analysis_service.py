@@ -10,13 +10,12 @@ Features:
 """
 import json
 import re
-from pathlib import Path
 from loguru import logger
 from services.translation_service import TranslationService
+from utils.paths import get_resource_path
 
 class AnalysisService:
     def __init__(self):
-        # 1. Initialize Translator
         self.translator = None
         self.init_error = None
         try:
@@ -25,7 +24,6 @@ class AnalysisService:
             self.init_error = str(e)
             logger.error(f"Translator failed to start: {e}")
 
-        # 2. Load Knowledge Bases
         self.primary_glossary = {}
         self.backup_glossary = {} 
         
@@ -35,18 +33,16 @@ class AnalysisService:
     def _load_primary_glossary(self):
         """Loads your hand-written, easy-to-understand glossary."""
         try:
-            base_path = Path(__file__).parent.parent 
-            path = base_path / "data" / "medical_glossary.json"
+            path = get_resource_path("src/data/medical_glossary.json")
             
             if path.exists():
                 with open(path, 'r', encoding='utf-8') as f:
                     self.primary_glossary = json.load(f)
                 
-                # Cleanup metadata if present
                 if "_meta" in self.primary_glossary:
                     del self.primary_glossary["_meta"]
                     
-                logger.info(f"🧠 Primary Brain loaded: {len(self.primary_glossary)} terms.")
+                logger.info(f"Primary Brain loaded: {len(self.primary_glossary)} terms.")
             else:
                 self.primary_glossary = {"mg": {"title": "Milligrams", "desc": "Dosage unit", "type": "info"}}
         except Exception as e:
@@ -55,8 +51,7 @@ class AnalysisService:
     def _load_backup_glossary(self):
         """Loads the massive ICD-10 dataset."""
         try:
-            base_path = Path(__file__).parent.parent
-            path = base_path / "data" / "codes_glossary.json"
+            path = get_resource_path("src/data/codes_glossary.json")
             
             if path.exists():
                 with open(path, 'r', encoding='utf-8') as f:
@@ -77,9 +72,9 @@ class AnalysisService:
                     elif isinstance(raw_data, dict):
                         self.backup_glossary = raw_data
                         
-                logger.info(f"📚 Backup Brain loaded: {len(self.backup_glossary)} terms.")
+                logger.info(f"Backup Brain loaded: {len(self.backup_glossary)} terms.")
             else:
-                logger.warning(f"⚠️ Backup glossary not found at {path}")
+                logger.warning(f"Backup glossary not found at {path}")
         except Exception as e:
             logger.error(f"Backup glossary error: {e}")
 
@@ -112,7 +107,7 @@ class AnalysisService:
         text_lower = text.lower()
         found_terms = set() 
         
-        # --- PHASE 1: PRIMARY BRAIN ---
+        # PRIMARY BRAIN
         for term, data in self.primary_glossary.items():
             pattern = r'\b' + re.escape(term) + r'\b'
             if re.search(pattern, text_lower):
@@ -120,7 +115,7 @@ class AnalysisService:
                     insights.append(data)
                     found_terms.add(term)
 
-        # --- PHASE 2: REGEX PATTERNS ---
+        # REGEX PATTERNS
         if re.search(r'\b\d{2,3}/\d{2,3}\b', text):
             insights.append({
                 "title": "Blood Pressure", 
@@ -143,7 +138,6 @@ class AnalysisService:
                 "type": "info"
             })
 
-        # --- PHASE 3: BACKUP BRAIN (ICD-10) ---
         count = 0
         limit = 3 
         

@@ -4,7 +4,6 @@ Handles the Optical Character Recognition (OCR) logic.
 """
 import pytesseract
 from loguru import logger
-import cv2
 import numpy as np
 
 class OCRService:
@@ -25,20 +24,14 @@ class OCRService:
         try:
             logger.debug(f"Starting OCR with language: {lang}")
             
-            # --- NEW CONFIGURATION ---
-            # --psm 3: Fully automatic page segmentation (Good for full docs)
-            # --psm 6: Assume a single uniform block of text (Good for paragraphs)
-            # We will try PSM 3 first as it's the most robust for mixed forms.
             custom_config = r'--oem 3 --psm 3'
             
             text = pytesseract.image_to_string(
                 image, 
                 lang=lang, 
-                config=custom_config # <--- Inject config here
+                config=custom_config 
             )
             
-            # DEBUG: Print to terminal to see what Tesseract ACTUALLY found
-            # This helps you see if it's a font issue or an OCR issue
             print("\n=== RAW OCR OUTPUT START ===")
             print(text)
             print("=== RAW OCR OUTPUT END ===\n")

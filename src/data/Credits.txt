@@ -1,0 +1,4 @@
+The codes json file was from GitHub user smog1210.
+The medical glossary json was polished by Gemini AI.
+
+https://github.com/smog1210/2022-ICD-10-CM-JSON

@@ -1,7 +1,6 @@
 """
 src/services/ai_assistant.py
 Handles interaction with Google Gemini.
-Uses dictionary-based configuration to avoid 'types' errors.
 """
 import os
 from loguru import logger
@@ -17,14 +16,14 @@ class AIAssistant:
         self.api_key = os.getenv("GEMINI_API_KEY")
         
         if not self.api_key:
-            logger.error("❌ GEMINI_API_KEY not found in .env file!")
+            logger.error("GEMINI_API_KEY not found in .env file!")
             self.client = None
             return
 
         try:
             # Initialize Client
             self.client = genai.Client(api_key=self.api_key)
-            logger.info("✨ Gemini AI Client initialized.")
+            logger.info("Gemini AI Client initialized.")
         except Exception as e:
             logger.error(f"Failed to connect to Gemini: {e}")
             self.client = None
@@ -34,7 +33,7 @@ class AIAssistant:
         Generates an empathetic, structured explanation using Gemini.
         """
         if not self.client:
-            return "⚠️ AI Error: Client not active. Check API Key."
+            return "AI Error: Client not active. Check API Key."
 
         # 3. Construct the Prompt
         prompt = f"""

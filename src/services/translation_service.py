@@ -2,28 +2,17 @@
 src/services/translation_service.py
 Handles loading AI models and performing translation.
 """
-import os
-from pathlib import Path
 from loguru import logger
 from transformers import MarianMTModel, MarianTokenizer
+from utils.paths import get_resource_path
 
 class TranslationService:
-    """
-    Manages Neural Machine Translation (NMT) models.
-    """
     
     def __init__(self):
         self.models = {} 
         self.tokenizers = {}
         
-        # --- PATH FIX IS HERE ---
-        # Current file: src/services/translation_service.py
-        # .parent       = src/services
-        # .parent.parent = src
-        base_path = Path(__file__).parent.parent 
-        
-        # User's models are at: src/resources/models
-        self.model_dir = base_path / "resources" / "models"
+        self.model_dir = get_resource_path("src/resources/models")
         
         self.model_map = {
             "Spanish": "Helsinki-NLP/opus-mt-en-es",
@@ -46,18 +35,17 @@ class TranslationService:
             
         model_path = self.model_dir / model_name
         
-        # Debug print to help you verify
         if not model_path.exists():
-            logger.error(f"❌ Path not found: {model_path}")
+            logger.error(f"Path not found: {model_path}")
             raise FileNotFoundError(f"Model missing for {target_lang}")
             
-        logger.info(f"⏳ Loading AI Model for {target_lang}...")
+        logger.info(f"Loading AI Model for {target_lang}...")
         
         try:
             # Load from local folder
             self.tokenizers[target_lang] = MarianTokenizer.from_pretrained(str(model_path))
             self.models[target_lang] = MarianMTModel.from_pretrained(str(model_path))
-            logger.success(f"✅ Loaded {target_lang} model")
+            logger.success(f"Loaded {target_lang} model")
         except Exception as e:
             logger.critical(f"Failed to load model: {e}")
             raise e
@@ -73,7 +61,7 @@ class TranslationService:
         
         # Translate
         inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
-        translated = model.generate(**inputs)
+        translated = model.generate(**inputs) #kwargs
         result = tokenizer.batch_decode(translated, skip_special_tokens=True)
         
         return " ".join(result)

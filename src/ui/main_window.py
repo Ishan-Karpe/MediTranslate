@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QStatusBar, QMessageBox
 )
 from PySide6.QtGui import QAction
-from loguru import logger
 from ui.scanner_tab import ScannerTab
 
 class MainWindow(QMainWindow):
@@ -61,4 +60,4 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("New scan started")
 
     def _show_about(self):
-        QMessageBox.about(self, "About MediTranslate", "<h2>MediTranslate v1.0</h2><p>Day 1 MVP Build</p>")
+        QMessageBox.about(self, "About MediTranslate", "<h2>MediTranslate v1.0</h2><p>Built by Ishan Karpe</p>")

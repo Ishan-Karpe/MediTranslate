@@ -1,6 +1,6 @@
 [project]
 name = "MediTranslate"
-version = "0.1.0"
+version = "1.0.0"
 description = "A simple, private, and offline medical translation tool that scans medical documents and provides translated + explained versions."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -12,6 +12,7 @@ dependencies = [
     "opencv-python>=4.11.0.86",
     "pdf2image>=1.17.0",
     "pillow>=12.0.0",
+    "pyinstaller>=6.17.0",
     "pyside6>=6.10.1",
     "pytesseract>=0.3.13",
     "python-dotenv>=1.2.1",

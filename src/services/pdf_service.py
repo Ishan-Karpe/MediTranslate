@@ -1,7 +1,6 @@
 """
 src/services/pdf_service.py
 Generates Bilingual PDF Reports.
-FIXED: Defensive coding to prevent TypeErrors during export.
 """
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib import colors
@@ -9,8 +8,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from pathlib import Path
 from loguru import logger
+from utils.paths import get_resource_path
 
 class PDFService:
     def __init__(self):
@@ -24,8 +23,7 @@ class PDFService:
         self.fonts = {'Hindi': 'Helvetica', 'Latin': 'Helvetica'}
         
         try:
-            base_path = Path(__file__).parent.parent 
-            font_dir = base_path / "resources" / "fonts"
+            font_dir = get_resource_path("src/resources/fonts")
             
             # Register Hindi
             hindi_path = font_dir / "NotoSansDevanagari-Regular.ttf"
@@ -54,7 +52,6 @@ class PDFService:
         elements = []
         styles = getSampleStyleSheet()
         
-        # --- 1. SETUP STYLES ---
         # Ensure we always have a valid font name
         target_font = self.fonts.get('Hindi', 'Helvetica') if lang == "Hindi" else self.fonts.get('Latin', 'Helvetica')
         
@@ -63,15 +60,12 @@ class PDFService:
         normal_style = ParagraphStyle('Body', parent=styles['BodyText'], fontName=self.fonts['Latin'])
         trans_style = ParagraphStyle('Trans', parent=styles['BodyText'], fontName=target_font)
 
-        # --- 2. HEADER ---
         elements.append(Paragraph("MediTranslate Report", title_style))
-        # Ensure variables are strings
         type_str = str(doc_type) if doc_type else "Unknown"
         lang_str = str(lang) if lang else "English"
         elements.append(Paragraph(f"Type: {type_str} | Language: {lang_str}", meta_style))
         elements.append(Spacer(1, 20))
 
-        # --- 3. TRANSLATION TABLE ---
         orig_str = str(original_text) if original_text else ""
         trans_str = str(translated_text) if translated_text else ""
         
@@ -104,8 +98,7 @@ class PDFService:
         ]))
         elements.append(t)
         elements.append(Spacer(1, 30))
-
-        # --- 4. INSIGHTS ---
+        
         if insights:
             elements.append(Paragraph("Medical Insights", title_style))
             elements.append(Spacer(1, 10))
