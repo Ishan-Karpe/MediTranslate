@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QStatusBar, QMessageBox
 )
 from PySide6.QtGui import QAction
-from ui.scanner_tab import ScannerTab
+from meditranslate.ui.scanner_tab import ScannerTab
 
 class MainWindow(QMainWindow):
     def __init__(self):

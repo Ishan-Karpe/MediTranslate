@@ -4,7 +4,7 @@ Handles loading AI models and performing translation.
 """
 from loguru import logger
 from transformers import MarianMTModel, MarianTokenizer
-from utils.paths import get_resource_path
+from meditranslate.utils.paths import get_resource_path
 
 class TranslationService:
     
@@ -12,7 +12,7 @@ class TranslationService:
         self.models = {} 
         self.tokenizers = {}
         
-        self.model_dir = get_resource_path("src/meditranslate/resources/models")
+        self.model_dir = get_resource_path("resources/models")
         
         self.model_map = {
             "Spanish": "Helsinki-NLP/opus-mt-en-es",

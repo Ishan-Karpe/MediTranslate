@@ -9,7 +9,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from loguru import logger
-from utils.paths import get_resource_path
+from meditranslate.utils.paths import get_resource_path
 
 class PDFService:
     def __init__(self):
@@ -23,7 +23,7 @@ class PDFService:
         self.fonts = {'Hindi': 'Helvetica', 'Latin': 'Helvetica'}
         
         try:
-            font_dir = get_resource_path("src/meditranslate/resources/fonts")
+            font_dir = get_resource_path("resources/fonts")
             
             # Register Hindi
             hindi_path = font_dir / "NotoSansDevanagari-Regular.ttf"

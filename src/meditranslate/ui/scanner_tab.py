@@ -24,11 +24,11 @@ from PySide6.QtCore import Qt, Signal, QThread, QObject
 from PySide6.QtGui import QFont
 
 # Services
-from services.ocr_service import OCRService
-from services.analysis_service import AnalysisService
-from services.ai_assistant import AIAssistant
-from services.pdf_service import PDFService
-from utils.image_processing import ImageProcessor
+from meditranslate.services.ocr_service import OCRService
+from meditranslate.services.analysis_service import AnalysisService
+from meditranslate.services.ai_assistant import AIAssistant
+from meditranslate.services.pdf_service import PDFService
+from meditranslate.utils.image_processing import ImageProcessor
 
 # --- WORKER 1: IMAGE PROCESSING, OCR & TRANSLATION ---
 class ProcessingWorker(QObject):

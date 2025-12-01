@@ -11,8 +11,8 @@ Features:
 import json
 import re
 from loguru import logger
-from services.translation_service import TranslationService
-from utils.paths import get_resource_path
+from meditranslate.services.translation_service import TranslationService
+from meditranslate.utils.paths import get_resource_path
 
 class AnalysisService:
     def __init__(self):
@@ -33,7 +33,7 @@ class AnalysisService:
     def _load_primary_glossary(self):
         """Loads your hand-written, easy-to-understand glossary."""
         try:
-            path = get_resource_path("src/meditranslate/data/medical_glossary.json")
+            path = get_resource_path("data/medical_glossary.json")
             
             if path.exists():
                 with open(path, 'r', encoding='utf-8') as f:
@@ -51,7 +51,7 @@ class AnalysisService:
     def _load_backup_glossary(self):
         """Loads the massive ICD-10 dataset."""
         try:
-            path = get_resource_path("src/meditranslate/data/codes_glossary.json")
+            path = get_resource_path("data/codes_glossary.json")
             
             if path.exists():
                 with open(path, 'r', encoding='utf-8') as f:
